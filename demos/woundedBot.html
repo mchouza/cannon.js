@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Adapted from hinge.html by Mariano M. Chouza -->
+    <title>cannon.js - Wounded bot demo</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="css/style.css" type="text/css"/>
+  </head>
+  <body>
+    <script src="../build/cannon.js"></script>
+    <script src="../build/cannon.demo.js"></script>
+    <script src="../libs/dat.gui.js"></script>
+    <script src="../libs/Three.js"></script>
+    <script src="../libs/TrackballControls.js"></script>
+    <script src="../libs/Detector.js"></script>
+    <script src="../libs/Stats.js"></script>
+    <script src="../libs/smoothie.js"></script>
+    <script>
+        var demo = new CANNON.Demo();
+        var mass = 1;
+
+        demo.addScene("woundedBot",function(){
+            var world = demo.getWorld();
+            world.gravity.set(0,0,-20);
+
+            var groundMaterial = new CANNON.Material("groundMaterial");
+            var legMaterial = new CANNON.Material("legMaterial");
+            var legGroundContactMaterial = new CANNON.ContactMaterial(groundMaterial,legMaterial, { friction: 0.5, restitution: 0.3 });
+            world.addContactMaterial(legGroundContactMaterial);
+
+            var legShape = new CANNON.Box(new CANNON.Vec3(2,0.5,0.5));
+            var legEndShape = new CANNON.Sphere(1.0);
+            var leftFrontLeg = new CANNON.Body({ mass: mass, material: legMaterial });
+            leftFrontLeg.addShape(legShape);
+            leftFrontLeg.addShape(legEndShape, new CANNON.Vec3(2,0.0,0.0));
+            var rightFrontLeg = new CANNON.Body({ mass: mass, material: legMaterial });
+            rightFrontLeg.addShape(legShape);
+            rightFrontLeg.addShape(legEndShape, new CANNON.Vec3(2,0.0,0.0));
+            var leftRearLeg = new CANNON.Body({ mass: mass, material: legMaterial });
+            leftRearLeg.addShape(legShape);
+            leftRearLeg.addShape(legEndShape, new CANNON.Vec3(-2,0.0,0.0));
+            var rightRearLeg = new CANNON.Body({ mass: mass, material: legMaterial });
+            rightRearLeg.addShape(legShape);
+            rightRearLeg.addShape(legEndShape, new CANNON.Vec3(-2,0.0,0.0));
+
+            var botBodyShape = new CANNON.Box(new CANNON.Vec3(5,2,0.5));
+            var botBody = new CANNON.Body({ mass: mass });
+            botBody.addShape(botBodyShape);
+
+            var leftFrontLegSpring = new CANNON.Spring(leftFrontLeg, botBody, {
+                localAnchorA: new CANNON.Vec3(0,0,-0.5),
+                localAnchorB: new CANNON.Vec3(0,0,-0.5),
+                stiffness: 2300.0,
+                restLength: 6.0
+            });
+            var rightFrontLegSpring = new CANNON.Spring(rightFrontLeg, botBody, {
+                localAnchorA: new CANNON.Vec3(0,0,-0.5),
+                localAnchorB: new CANNON.Vec3(0,0,-0.5),
+                stiffness: 2300.0,
+                restLength: 6.0
+            });
+            var leftRearLegSpring = new CANNON.Spring(leftRearLeg, botBody, {
+                localAnchorA: new CANNON.Vec3(0,0,-0.5),
+                localAnchorB: new CANNON.Vec3(0,0,-0.5),
+                stiffness: 2300.0,
+                restLength: 6.0
+            });
+            var rightRearLegSpring = new CANNON.Spring(rightRearLeg, botBody, {
+                localAnchorA: new CANNON.Vec3(0,0,-0.5),
+                localAnchorB: new CANNON.Vec3(0,0,-0.5),
+                stiffness: 2300.0,
+                restLength: 6.0
+            });
+            world.addEventListener("postStep",function(event){
+                leftFrontLegSpring.restLength = 6.0 + 0.5 * Math.sin(this.time);
+                rightFrontLegSpring.restLength = 6.0 + 0.5 * Math.sin(this.time);
+                leftFrontLegSpring.applyForce();
+                rightFrontLegSpring.applyForce();
+                leftRearLegSpring.applyForce();
+                rightRearLegSpring.applyForce();
+            });
+
+            // Position constrain legs
+            var zero = new CANNON.Vec3();
+            leftFrontLeg .position.set(  6,  3, 0);
+            rightFrontLeg.position.set(  6, -3, 0);
+            leftRearLeg  .position.set( -6,  3, 0);
+            rightRearLeg .position.set( -6, -3, 0);
+
+            // Constrain legs
+            var constraints = [];
+
+            // Hinge the legs
+            var leftAxis =       new CANNON.Vec3(0,1,0);
+            var rightAxis =      new CANNON.Vec3(0,-1,0);
+
+            constraints.push(new CANNON.HingeConstraint(botBody, leftFrontLeg,  { pivotA: new CANNON.Vec3( 4.5, 3, 0), axisA: leftAxis,  pivotB: new CANNON.Vec3( -1.5, 0, 0), axisB: leftAxis }));
+            constraints.push(new CANNON.HingeConstraint(botBody, rightFrontLeg, { pivotA: new CANNON.Vec3( 4.5,-3, 0), axisA: rightAxis, pivotB: new CANNON.Vec3( -1.5, 0, 0), axisB: rightAxis }));
+            constraints.push(new CANNON.HingeConstraint(botBody, leftRearLeg,   { pivotA: new CANNON.Vec3(-4.5, 3, 0), axisA: leftAxis, pivotB: new CANNON.Vec3( 1.5, 0, 0), axisB: leftAxis }));
+            constraints.push(new CANNON.HingeConstraint(botBody, rightRearLeg,  { pivotA: new CANNON.Vec3(-4.5,-3, 0), axisA: rightAxis, pivotB: new CANNON.Vec3(1.5, 0, 0), axisB: rightAxis }));
+
+            for(var i=0; i<constraints.length; i++)
+                world.addConstraint(constraints[i]);
+
+            var bodies = [botBody,leftFrontLeg,rightFrontLeg,leftRearLeg,rightRearLeg];
+            for(var i=0; i<bodies.length; i++){
+                world.add(bodies[i]);
+                demo.addVisual(bodies[i]);
+            }
+
+            // Ground
+            var groundShape = new CANNON.Plane();
+            var ground = new CANNON.Body({ mass: 0, material: groundMaterial });
+            ground.addShape(groundShape);
+            ground.position.z = -5;
+            world.add(ground);
+            demo.addVisual(ground);
+        });
+
+        demo.start();
+
+    </script>
+  </body>
+</html>
